@@ -108,69 +108,105 @@ class MainWindow(QWidget):
         self.plавка_fields = []
         
         self.setWindowTitle("Электронный журнал термообработки")
-        self.setMinimumWidth(600)  # Уменьшаем минимальную ширину
-        self.setMinimumHeight(400)  # Уменьшаем минимальную высоту
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(400)
         
-        # Обновляем стили для более компактного вида
+        # Обновляем стили для гранж-дизайна
         self.setStyleSheet("""
             QWidget {
-                background-color: #1a1a1a;
-                color: #ffffff;
-                font-family: 'Arial';
+                background-color: #2B2B2B;
+                color: #E6E6E6;
+                font-family: 'Arial Black';
             }
             QLabel {
-                color: #00ffff;
-                font-size: 12px;  /* Уменьшаем размер шрифта */
-                padding: 5px;     /* Уменьшаем отступы */
-                border: 1px solid #00ffff;
-                border-radius: 3px;
-                background-color: #2a2a2a;
-                margin: 1px;      /* Добавляем минимальные внешние отступы */
+                color: #FF6B35;
+                font-size: 12px;
+                padding: 8px;
+                border: 2px solid #4A4A4A;
+                border-radius: 5px;
+                background-color: #1A1A1A;
+                margin: 2px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
             }
             QComboBox {
-                background-color: #2a2a2a;
-                border: 1px solid #00ffff;
-                border-radius: 3px;
-                padding: 3px;
-                color: #ffffff;
-                min-height: 20px; /* Уменьшаем минимальную высоту */
-                margin: 1px;
+                background-color: #333333;
+                border: 2px solid #4A4A4A;
+                border-radius: 5px;
+                padding: 5px;
+                color: #FF6B35;
+                min-height: 25px;
+                margin: 2px;
+                font-weight: bold;
             }
             QComboBox::drop-down {
                 border: none;
-                width: 20px;
+                width: 25px;
+                background-color: #4A4A4A;
+            }
+            QComboBox:hover {
+                background-color: #3D3D3D;
+                border-color: #FF6B35;
             }
             QLineEdit {
-                background-color: #2a2a2a;
-                border: 1px solid #00ffff;
-                border-radius: 3px;
-                padding: 3px;
-                color: #ffffff;
-                min-height: 20px;
-                margin: 1px;
+                background-color: #333333;
+                border: 2px solid #4A4A4A;
+                border-radius: 5px;
+                padding: 5px;
+                color: #FF6B35;
+                min-height: 25px;
+                margin: 2px;
+                font-weight: bold;
+            }
+            QLineEdit:focus {
+                border-color: #FF6B35;
             }
             QDateEdit {
-                background-color: #2a2a2a;
-                border: 1px solid #00ffff;
-                border-radius: 3px;
-                padding: 3px;
-                color: #ffffff;
-                min-height: 20px;
-                margin: 1px;
+                background-color: #333333;
+                border: 2px solid #4A4A4A;
+                border-radius: 5px;
+                padding: 5px;
+                color: #FF6B35;
+                min-height: 25px;
+                margin: 2px;
+                font-weight: bold;
+            }
+            QDateEdit::drop-down {
+                border: none;
+                width: 25px;
+                background-color: #4A4A4A;
             }
             QPushButton {
-                background-color: #00ffff;
-                color: #000000;
+                background-color: #FF6B35;
+                color: #1A1A1A;
                 border: none;
-                border-radius: 3px;
-                padding: 5px;
-                font-size: 12px;
+                border-radius: 5px;
+                padding: 8px 15px;
+                font-size: 14px;
                 font-weight: bold;
-                min-height: 25px;
-                margin: 1px;
+                min-height: 30px;
+                margin: 5px;
+                text-transform: uppercase;
+                letter-spacing: 2px;
             }
             QPushButton:hover {
-                background-color: #00cccc;
+                background-color: #FF8C61;
+            }
+            QPushButton:pressed {
+                background-color: #E65A2C;
+                padding: 9px 14px 7px 16px;
+            }
+            
+            /* Стиль для заголовка */
+            QLabel#title {
+                font-size: 20px;
+                font-weight: bold;
+                color: #FF6B35;
+                border: 3px solid #4A4A4A;
+                padding: 10px;
+                background-color: #1A1A1A;
+                margin: 5px;
+                letter-spacing: 3px;
             }
         """)
 
@@ -178,18 +214,9 @@ class MainWindow(QWidget):
         layout.setSpacing(2)  # Уменьшаем расстояние между элементами
         layout.setContentsMargins(5, 5, 5, 5)  # Уменьшаем отступы от краёв
 
-        # Заголовок
+        # Обновляем стиль заголовка
         title = QLabel("ЭЛЕКТРОННЫЙ ЖУРНАЛ ТЕРМООБРАБОТКИ")
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 16px;
-                font-weight: bold;
-                color: #00ffff;
-                border: 2px solid #00ffff;
-                padding: 5px;
-                background-color: #2a2a2a;
-            }
-        """)
+        title.setObjectName("title")  # Добавляем id для стилизации
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
@@ -354,6 +381,10 @@ class MainWindow(QWidget):
         sender = self.sender()
         previous_value = sender.property("previous_value")
         
+        # Проверяем, действительно ли значение изменилось
+        if selected_value == previous_value:
+            return
+        
         # Удаляем предыдущее значение из selected_plavki, если оно было
         if previous_value and not previous_value.startswith("ПЛАВКА"):
             self.selected_plavki.discard(previous_value)
@@ -409,6 +440,12 @@ class MainWindow(QWidget):
         return False
 
     def save_data(self):
+        # Добавляем проверку на дублирование плавок
+        if len(self.selected_plavki) != len([combo.currentText() for combo in self.plавка_fields 
+                                            if not combo.currentText().startswith("ПЛАВКА")]):
+            QMessageBox.warning(self, "Ошибка", "Обнаружено дублирование плавок.")
+            return
+        
         номер_печи = self.термообработка_номер_печи.currentText()
         термообработка_дата = self.термообработка_дата.date().toString("dd.MM.yyyy")
         начало_первого_цикла = self.термообработка_начало_первого_цикла.text().strip()
@@ -458,12 +495,27 @@ class MainWindow(QWidget):
             QMessageBox.critical(self, "Ошибка", f"Ошибка при сохранении данных: {str(e)}")
 
     def clear_fields(self):
+        # Добавляем очистку selected_plavki при сбросе полей
+        self.selected_plavki.clear()
         self.термообработка_дата.setDate(QDate.currentDate())
         self.термообработка_начало_первого_цикла.clear()
         self.термообработка_конец_первого_цикла.clear()
         self.термообработка_начало_второго_цикла.clear()
         self.термообработка_конец_второго_цикла.clear()
         self.update_plavka_fields(self.термообработка_номер_печи.currentText())
+
+    def is_plavka_available(self, плавка, current_combo=None):
+        """
+        Проверяет, доступна ли плавка для выбора
+        Args:
+            плавка: номер плавки для проверки
+            current_combo: текущий комбобокс (чтобы не исключать его текущее значение)
+        """
+        if плавка.startswith("ПЛАВКА"):
+            return True
+        if current_combo and current_combo.currentText() == плавка:
+            return True
+        return плавка not in self.selected_plavki
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

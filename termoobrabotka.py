@@ -321,9 +321,13 @@ class MainWindow(QWidget):
         self.setLayout(layout)
         
         # Инициализация полей плавок
+        self.selected_plavki = set()
         self.update_plavka_fields('1')
 
     def update_plavka_fields(self, печь_номер):
+        # Сбрасываем выбранные плавки при обновлении полей
+        self.selected_plavki.clear()
+        
         # Очищаем существующие поля
         for field in self.plавка_fields:
             self.plавка_layout.removeWidget(field)
@@ -339,10 +343,54 @@ class MainWindow(QWidget):
         # Создаем новые поля
         for i in range(количество_полей):
             combo = QComboBox()
+            combo.setObjectName(f"plавка_{i}")  # Добавляем уникальное имя
             combo.addItem(f"ПЛАВКА {i+1}")
             combo.addItems(доступные_плавки)
+            combo.currentTextChanged.connect(self.on_plavka_selected)
             self.plавка_fields.append(combo)
             self.plавка_layout.addWidget(combo)
+
+    def on_plavka_selected(self, selected_value):
+        sender = self.sender()
+        previous_value = sender.property("previous_value")
+        
+        # Удаляем предыдущее значение из selected_plavki, если оно было
+        if previous_value and not previous_value.startswith("ПЛАВКА"):
+            self.selected_plavki.discard(previous_value)
+            
+        # Добавляем новое значение, если это не заголовок
+        if not selected_value.startswith("ПЛАВКА"):
+            self.selected_plavki.add(selected_value)
+            
+        # Сохраняем текущее значение как предыдущее
+        sender.setProperty("previous_value", selected_value)
+        
+        # Обновляем доступные плавки во всех комбобоксах
+        доступные_плавки = get_available_plavki()
+        
+        # Обновляем каждый комбобокс
+        for combo in self.plавка_fields:
+            if combo != sender:
+                current_value = combo.currentText()
+                combo.blockSignals(True)  # Блокируем сигналы во время обновления
+                combo.clear()
+                
+                # Добавляем заголовок
+                combo.addItem(f"ПЛАВКА {self.plавка_fields.index(combo)+1}")
+                
+                # Добавляем доступные плавки
+                for плавка in доступные_плавки:
+                    if плавка not in self.selected_plavki or плавка == current_value:
+                        combo.addItem(плавка)
+                
+                # Восстанавливаем текущее значение если оно еще доступно
+                index = combo.findText(current_value)
+                if index >= 0:
+                    combo.setCurrentIndex(index)
+                else:
+                    combo.setCurrentIndex(0)  # Устанавливаем на заголовок если значение недоступно
+                    
+                combo.blockSignals(False)  # Разблокируем сигналы
 
     def format_time_input(self, text):
         """Автоматически добавляет двоеточие после двух цифр"""

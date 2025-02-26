@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLineEdit,
     QPushButton, QMessageBox, QLabel, QComboBox, QDateEdit, QHBoxLayout
 )
-from PySide6.QtCore import Qt, QDate
+from PySide6.QtCore import Qt, QDate, QTimer
 from openpyxl import Workbook, load_workbook
 from PySide6.QtGui import QPalette, QColor, QFont
 
@@ -12,37 +12,49 @@ from PySide6.QtGui import QPalette, QColor, QFont
 def save_to_excel(номер_плавки, термообработка_номер_печи, термообработка_дата,
                  термообработка_начало_первого_цикла, термообработка_конец_первого_цикла,
                  термообработка_начало_второго_цикла="", термообработка_конец_второго_цикла=""):
+    wb = None
     try:
+        headers = ['Номер плавки', 'Номер печи', 'Дата', 
+                  'Начало первого цикла', 'Конец первого цикла',
+                  'Начало второго цикла', 'Конец второго цикла']
+
         # Если файл не существует, создаем его с заголовками
         if not os.path.exists('termoobrabotka.xlsx'):
             wb = Workbook()
             ws = wb.active
             ws.title = "Records"
-            headers = ['Номер плавки', 'Номер печи', 'Дата', 
-                      'Начало первого цикла', 'Конец первого цикла',
-                      'Начало второго цикла', 'Конец второго цикла']
             for col, header in enumerate(headers, start=1):
                 ws.cell(row=1, column=col, value=header)
+            row_to_write = 2  # Первая строка для данных
         else:
             wb = load_workbook('termoobrabotka.xlsx')
             if "Records" not in wb.sheetnames:
                 ws = wb.create_sheet("Records")
-                headers = ['Номер плавки', 'Номер печи', 'Дата', 
-                          'Начало первого цикла', 'Конец первого цикла',
-                          'Начало второго цикла', 'Конец второго цикла']
+                # Добавляем заголовки для нового листа
                 for col, header in enumerate(headers, start=1):
                     ws.cell(row=1, column=col, value=header)
+                row_to_write = 2
             else:
                 ws = wb["Records"]
-            
-        next_row = ws.max_row + 1
-        
+                # Проверяем, существует ли уже запись с таким номером плавки
+                existing_row = None
+                for row in range(2, ws.max_row + 1):
+                    if ws.cell(row=row, column=1).value == номер_плавки:
+                        existing_row = row
+                        break
+                
+                if existing_row:
+                    row_to_write = existing_row
+                else:
+                    row_to_write = ws.max_row + 1
+
+        # Записываем значения
         values = [номер_плавки, термообработка_номер_печи, термообработка_дата,
                  термообработка_начало_первого_цикла, термообработка_конец_первого_цикла,
                  термообработка_начало_второго_цикла, термообработка_конец_второго_цикла]
         
         for col, value in enumerate(values, start=1):
-            cell = ws.cell(row=next_row, column=col)
+            cell = ws.cell(row=row_to_write, column=col)
             cell.value = value
             
             if col == 3:  # Колонка C (дата)
@@ -51,25 +63,32 @@ def save_to_excel(номер_плавки, термообработка_номе
                 cell.number_format = 'HH:MM'
         
         wb.save('termoobrabotka.xlsx')
-        wb.close()
     except Exception as e:
         raise Exception(f"Ошибка при сохранении в Excel: {str(e)}")
+    finally:
+        if wb:
+            wb.close()
 
 def get_existing_plavki():
     file_name = 'plavka.xlsx'
     if not os.path.exists(file_name):
         return []
 
-    workbook = load_workbook(file_name)
-    sheet = workbook.active
-    номера_плавок = []
-    
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        номер_плавки = row[1]  
-        if номер_плавки is not None:
-            номера_плавок.append(str(номер_плавки))
+    wb = None
+    try:
+        wb = load_workbook(file_name)
+        sheet = wb.active
+        номера_плавок = []
+        
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            номер_плавки = row[1]  
+            if номер_плавки is not None:
+                номера_плавок.append(str(номер_плавки))
 
-    return номера_плавок
+        return номера_плавок
+    finally:
+        if wb:
+            wb.close()
 
 def get_available_plavki():
     # Получаем все номера плавок из plavka.xlsx
@@ -78,28 +97,28 @@ def get_available_plavki():
     # Получаем номера плавок, которые уже существуют в termoobrabotka.xlsx
     существующие_плавки = set()
     file_name = 'termoobrabotka.xlsx'
-    if os.path.exists(file_name):
-        workbook = load_workbook(file_name)
-        if "Records" in workbook.sheetnames:
-            sheet = workbook["Records"]
-            for row in sheet.iter_rows(min_row=2, values_only=True):
-                существующие_плавки.add(row[0])  # Первый столбец содержит номер плавки
+    wb = None
+    try:
+        if os.path.exists(file_name):
+            wb = load_workbook(file_name)
+            if "Records" in wb.sheetnames:
+                sheet = wb["Records"]
+                for row in sheet.iter_rows(min_row=2, values_only=True):
+                    существующие_плавки.add(row[0])  # Первый столбец содержит номер плавки
 
-    # Фильтруем номера плавок, оставляя только те, которые отсутствуют в termoobrabotka.xlsx и имеют "/25"
-    доступные_плавки = [
-        плавка for плавка in все_плавки 
-        if плавка not in существующие_плавки and '/25' in плавка
-    ]
+        # Фильтруем номера плавок
+        доступные_плавки = [
+            плавка for плавка in все_плавки 
+            if плавка not in существующие_плавки and '/25' in плавка
+        ]
 
-    # Сортируем по убыванию
-    доступные_плавки.sort(reverse=True)
+        # Сортируем по убыванию
+        доступные_плавки.sort(reverse=True)
 
-    # Отладочные сообщения
-    print(f"Все плавки: {все_плавки}")
-    print(f"Существующие плавки: {существующие_плавки}")
-    print(f"Доступные плавки: {доступные_плавки}")
-
-    return доступные_плавки
+        return доступные_плавки
+    finally:
+        if wb:
+            wb.close()
 
 
 class MainWindow(QWidget):
@@ -111,16 +130,18 @@ class MainWindow(QWidget):
         self.setMinimumWidth(600)
         self.setMinimumHeight(400)
         
-        # Обновляем стили для гранж-дизайна
+        # Обновляем стили для лучшей читаемости
         self.setStyleSheet("""
             QWidget {
                 background-color: #2B2B2B;
                 color: #E6E6E6;
-                font-family: 'Arial Black';
+                font-family: 'Segoe UI', 'Arial';
+                font-size: 12px;
             }
             QLabel {
                 color: #FF6B35;
-                font-size: 12px;
+                font-size: 13px;
+                font-weight: bold;
                 padding: 8px;
                 border: 2px solid #4A4A4A;
                 border-radius: 5px;
@@ -134,9 +155,10 @@ class MainWindow(QWidget):
                 border: 2px solid #4A4A4A;
                 border-radius: 5px;
                 padding: 5px;
-                color: #FF6B35;
+                color: #FFFFFF;
                 min-height: 25px;
                 margin: 2px;
+                font-size: 12px;
                 font-weight: bold;
             }
             QComboBox::drop-down {
@@ -153,9 +175,10 @@ class MainWindow(QWidget):
                 border: 2px solid #4A4A4A;
                 border-radius: 5px;
                 padding: 5px;
-                color: #FF6B35;
+                color: #FFFFFF;
                 min-height: 25px;
                 margin: 2px;
+                font-size: 12px;
                 font-weight: bold;
             }
             QLineEdit:focus {
@@ -166,9 +189,10 @@ class MainWindow(QWidget):
                 border: 2px solid #4A4A4A;
                 border-radius: 5px;
                 padding: 5px;
-                color: #FF6B35;
+                color: #FFFFFF;
                 min-height: 25px;
                 margin: 2px;
+                font-size: 12px;
                 font-weight: bold;
             }
             QDateEdit::drop-down {
@@ -178,7 +202,7 @@ class MainWindow(QWidget):
             }
             QPushButton {
                 background-color: #FF6B35;
-                color: #1A1A1A;
+                color: #FFFFFF;
                 border: none;
                 border-radius: 5px;
                 padding: 8px 15px;
@@ -199,10 +223,10 @@ class MainWindow(QWidget):
             
             /* Стиль для заголовка */
             QLabel#title {
-                font-size: 20px;
+                font-size: 22px;
                 font-weight: bold;
-                color: #FF6B35;
-                border: 3px solid #4A4A4A;
+                color: #FFFFFF;
+                border: 3px solid #FF6B35;
                 padding: 10px;
                 background-color: #1A1A1A;
                 margin: 5px;
@@ -258,9 +282,10 @@ class MainWindow(QWidget):
 
         дата_label = QLabel("ТЕРМООБРАБОТКА")
         дата_label.setAlignment(Qt.AlignCenter)
+        дата_label.setObjectName("termo_label")  # Добавляем id для стилизации
         дата_label.setStyleSheet("""
-            QLabel {
-                color: #000000;
+            QLabel#termo_label {
+                color: #FFFFFF;
                 font-size: 32px;
                 font-weight: bold;
                 padding: 5px;
@@ -275,6 +300,26 @@ class MainWindow(QWidget):
             }
         """)
         right_layout.addWidget(дата_label)
+
+        # Сохраняем ссылку на метку как атрибут класса
+        self.termo_label = дата_label
+
+        # Создаем таймер для смены цветов
+        self.color_timer = QTimer(self)
+        self.color_timer.timeout.connect(self.update_label_color)
+        self.color_timer.start(1000)  # Интервал в миллисекундах (1000 = 1 секунда)
+
+        # Список цветов для анимации
+        self.colors = [
+            "#FF0000",  # Красный
+            "#FF7F00",  # Оранжевый
+            "#FFFF00",  # Желтый
+            "#00FF00",  # Зеленый
+            "#0000FF",  # Синий
+            "#4B0082",  # Индиго
+            "#9400D3"   # Фиолетовый
+        ]
+        self.current_color_index = 0
 
         self.термообработка_дата = QDateEdit()
         self.термообработка_дата.setDisplayFormat("dd.MM.yyyy")
@@ -426,8 +471,13 @@ class MainWindow(QWidget):
     def format_time_input(self, text):
         """Автоматически добавляет двоеточие после двух цифр"""
         if len(text) == 2 and text.isdigit():
-            self.sender().setText(text + ":")
-            self.sender().setCursorPosition(3)  # Установка курсора после двоеточия
+            # Проверяем, что часы в допустимом диапазоне
+            if 0 <= int(text) < 24:
+                self.sender().setText(text + ":")
+                self.sender().setCursorPosition(3)
+            else:
+                self.sender().setText("23:")
+                self.sender().setCursorPosition(3)
 
     def validate_time(self, time_str):
         """Проверка корректности ввода времени в формате ЧЧ:ММ"""
@@ -440,9 +490,17 @@ class MainWindow(QWidget):
         return False
 
     def save_data(self):
-        # Добавляем проверку на дублирование плавок
-        if len(self.selected_plavki) != len([combo.currentText() for combo in self.plавка_fields 
-                                            if not combo.currentText().startswith("ПЛАВКА")]):
+        # Проверка на дублирование плавок
+        выбранные_плавки = [
+            combo.currentText() for combo in self.plавка_fields 
+            if not combo.currentText().startswith("ПЛАВКА")
+        ]
+        
+        if not выбранные_плавки:
+            QMessageBox.warning(self, "Ошибка", "Выберите хотя бы одну плавку.")
+            return
+        
+        if len(set(выбранные_плавки)) != len(выбранные_плавки):
             QMessageBox.warning(self, "Ошибка", "Обнаружено дублирование плавок.")
             return
         
@@ -458,25 +516,18 @@ class MainWindow(QWidget):
             QMessageBox.warning(self, "Ошибка", "Некорректный ввод времени первого цикла. Используйте формат ЧЧ:ММ.")
             return
 
-        # Проверка времени для второго цикла (если заполнено)
-        if (начало_второго_цикла or конец_второго_цикла):
+        # Проверка времени для второго цикла
+        if (начало_второго_цикла and not конец_второго_цикла) or (not начало_второго_цикла and конец_второго_цикла):
+            QMessageBox.warning(self, "Ошибка", "Для второго цикла должны быть заполнены оба времени либо оба пустые.")
+            return
+
+        if начало_второго_цикла and конец_второго_цикла:
             if not self.validate_time(начало_второго_цикла) or not self.validate_time(конец_второго_цикла):
                 QMessageBox.warning(self, "Ошибка", "Некорректный ввод времени второго цикла. Используйте формат ЧЧ:ММ.")
                 return
 
-        # Собираем выбранные плавки
-        выбранные_плавки = []
-        for combo in self.plавка_fields:
-            плавка = combo.currentText()
-            if плавка != f"ПЛАВКА {len(выбранные_плавки)+1}":
-                выбранные_плавки.append(плавка)
-
-        if not выбранные_плавки:
-            QMessageBox.warning(self, "Ошибка", "Выберите хотя бы одну плавку.")
-            return
-
         try:
-            # Сохраняем данные для каждой выбранной плавки
+            # Сохраняем данные только для реально выбранных плавок
             for плавка in выбранные_плавки:
                 save_to_excel(
                     плавка,
@@ -495,13 +546,14 @@ class MainWindow(QWidget):
             QMessageBox.critical(self, "Ошибка", f"Ошибка при сохранении данных: {str(e)}")
 
     def clear_fields(self):
-        # Добавляем очистку selected_plavki при сбросе полей
         self.selected_plavki.clear()
         self.термообработка_дата.setDate(QDate.currentDate())
         self.термообработка_начало_первого_цикла.clear()
         self.термообработка_конец_первого_цикла.clear()
         self.термообработка_начало_второго_цикла.clear()
         self.термообработка_конец_второго_цикла.clear()
+        
+        # Обновляем список доступных плавок после очистки
         self.update_plavka_fields(self.термообработка_номер_печи.currentText())
 
     def is_plavka_available(self, плавка, current_combo=None):
@@ -516,6 +568,34 @@ class MainWindow(QWidget):
         if current_combo and current_combo.currentText() == плавка:
             return True
         return плавка not in self.selected_plavki
+
+    def update_label_color(self):
+        """Обновляет цвет метки термообработки"""
+        color = self.colors[self.current_color_index]
+        self.termo_label.setStyleSheet(f"""
+            QLabel#termo_label {{
+                color: {color};
+                font-size: 32px;
+                font-weight: bold;
+                padding: 5px;
+                border: 1px solid {color};
+                border-radius: 3px;
+                background-color: #2a2a2a;
+                margin: 1px;
+                background-image: url(termo.png);
+                background-position: center;
+                background-repeat: no-repeat;
+                background-origin: content;
+            }}
+        """)
+        
+        # Переходим к следующему цвету
+        self.current_color_index = (self.current_color_index + 1) % len(self.colors)
+
+    def closeEvent(self, event):
+        """Останавливаем таймер при закрытии окна"""
+        self.color_timer.stop()
+        super().closeEvent(event)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
